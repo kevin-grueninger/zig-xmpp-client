@@ -139,17 +139,15 @@ pub fn parse(text_to_parse: *const []u8) ?Tree {
 
 
 test "print xml" {
-    var name :  [10]u8= "SimpleNode".*;
+    var name = "SimpleNode".*;
     var content = "Test content in here".*;
-    const proxy_name: []u8 = &name;
-    const proxy_content: []u8 = &content;
     const simpleXml: Node = .{
 
             .parent= null,
-            .name= &proxy_name,
+            .name= &@as([]u8, &name),
             .attributes= std.ArrayList(*Attribute).empty,
             .children= std.ArrayList(*Node).empty,
-            .content= &proxy_content,
+            .content= &@as([]u8, &content),
     };
 
     std.debug.print("{f}", .{simpleXml});
