@@ -7,6 +7,36 @@ const Span = struct {
     end: usize,
 };
 
+const Version = struct {
+    major: u32,
+    minor: u32,
+    patch: ?u32,
+
+    pub fn parse(string: *const []u8) !@This() {
+        const slice = std.mem.splitAny(u8, string, .{"."});
+        const version_ints: [2]u32 = undefined;
+
+        for (0..2) |i| {
+            const version_strs = slice.next() orelse return error.InvalidVersionString;
+            std.fmt.parseInt(u32, version_ints[i], 10) orelse return error.ErrorParsingVersionString;
+            version_ints[i] = version_strs;
+        }
+        const patch: ?u32 = undefined;
+        {
+            const patch_vers_string = slice.next() or null;
+            if (patch_vers_string != null) {
+                patch = std.fmt.parseInt(u32, &patch_vers_string, 10) orelse return error.ErrorParsingVersionString;
+            }
+        }
+
+        return .{
+            .major = version_ints[0],
+            .minor = version_ints[1],
+            .patch = patch,
+        };
+    }
+};
+
 fn is_space(char: u8) bool {
     return char == ' ' or char == '\n' or char == '\r';
 }
@@ -114,7 +144,7 @@ const Node = struct {
 
 const Tree = struct {
     doctype: []u8 = "xml", // TODO, maybe enum better, mebe tagged enum
-    xml_version: []u8 = "1.0", // TODO create struct for limited semver support
+    xml_version: Version = .{ .major = 1, .minor = 0, .patch = null },
 
     nodes: @Vector(4, *Node),
     node_map: Map([]u8, *Node),
