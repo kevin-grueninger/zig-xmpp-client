@@ -143,16 +143,41 @@ const Node = struct {
 };
 
 const Tree = struct {
-    doctype: []u8 = "xml", // TODO, maybe enum better, mebe tagged enum
+    doctype: []const u8 = "xml",
     xml_version: Version = .{ .major = 1, .minor = 0, .patch = null },
-
-    nodes: @Vector(4, *Node),
+    root: *Node,
+    nodes: std.ArrayList(Node),
     node_map: Map([]u8, *Node),
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator, root: *Node) @This() {
+        return .{
+            .root = root,
+            .nodes = std.array_list.Managed(Node).init(alloc),
+            .node_map = std.hash_map.AutoHashMap([]u8, *Node).init(alloc),
+            .alloc = alloc,
+        };
+    }
+
+    pub fn deinit(this: @This()) void {
+        this.node_map.deinit();
+        this.nodes.deinit(this.alloc);
+    }
 
     pub fn get_node(this: *const @This(), name: *const []u8) ?Node {
-        @as(void, this);
-        @as(void, name);
-        std.debug.unimplemented();
+    /// Iterate through the nodes array list, no order specified
+    pub fn linear_iterator(this: *@This(), alloc: *const std.mem.Allocator) !TreeLinearIterator {
+        const nodes = try alloc.alignedAlloc(*Node, std.mem.Alignment.of(*Node), this.nodes.items.len);
+
+        for (0..this.nodes.items.len) |i| {
+            nodes[i] = &this.nodes.items[i];
+        }
+
+        return .{
+            .nodes = nodes,
+            .ind = 0,
+        };
+    }
     }
 };
 
@@ -161,7 +186,21 @@ pub fn parse(text_to_parse: *const []u8) ?Tree {
     std.debug.unimplemented();
 }
 
-test "print xml" {
+const TreeLinearIterator = struct {
+    nodes: []*Node,
+    ind: usize,
+
+    pub fn next(this: *@This()) ?*Node {
+        if (this.ind < this.nodes.len) {
+            const ret = this.nodes[this.ind];
+            this.ind += 1;
+            return ret;
+        }
+        return null;
+    }
+};
+
+test "node :: print xml" {
     var name = "SimpleNode".*;
     var content = "Test content in here".*;
     const simpleXml: Node = .{
@@ -173,4 +212,53 @@ test "print xml" {
     };
 
     std.debug.print("{f}", .{simpleXml});
+}
+
+test "tree :: linear iterator" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var nodes: [11]Node = undefined;
+
+    var p_name = "Parent Node".*;
+    var p_content = "Some Parent Content".*;
+    const parent_p = &nodes[0];
+    nodes[0] = .{
+        .parent = null,
+        .tag = &@as([]u8, &p_name),
+        .attributes = std.ArrayList(*Attribute).empty,
+        .children = std.ArrayList(*Node).empty,
+        .content = &@as([]u8, &p_content),
+    };
+
+    for (1..11) |i| {
+        var child_name = "Child Node".*;
+        var child_content = "Some Child Content".*;
+        nodes[i] = .{
+            .parent = parent_p,
+            .tag = &@as([]u8, &child_name),
+            .attributes = std.ArrayList(*Attribute).empty,
+            .children = std.ArrayList(*Node).empty,
+            .content = &@as([]u8, &child_content),
+        };
+    }
+
+    try parent_p.children.resize(alloc, 10);
+    for (1..11) |i| {
+        parent_p.children.items[i - 1] = &nodes[i];
+    }
+
+    var nodes_arrlist = std.ArrayList(Node).empty;
+    try nodes_arrlist.appendSlice(alloc, &nodes);
+    var tree: Tree = .{
+        .alloc = alloc,
+        .root = parent_p,
+        .nodes = nodes_arrlist,
+        .node_map = undefined,
+    };
+
+    var iter = try tree.linear_iterator(&alloc);
+    while (iter.next()) |node| {
+        std.debug.print("{f}\n", .{node.*});
+    }
 }
