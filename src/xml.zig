@@ -164,7 +164,16 @@ const Tree = struct {
         this.nodes.deinit(this.alloc);
     }
 
+///O(n), linear search for node with matching name
     pub fn get_node(this: *const @This(), name: *const []u8) ?Node {
+for (this.nodes.items) |node| {
+            if (!std.mem.order([]u8, *node.tag, *name).differ()) {
+                return &node;
+            }
+        }
+        return null;
+    }
+
     /// Iterate through the nodes array list, no order specified
     pub fn linear_iterator(this: *@This(), alloc: *const std.mem.Allocator) !TreeLinearIterator {
         const nodes = try alloc.alignedAlloc(*Node, std.mem.Alignment.of(*Node), this.nodes.items.len);
