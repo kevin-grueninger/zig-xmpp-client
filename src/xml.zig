@@ -164,9 +164,9 @@ const Tree = struct {
         this.nodes.deinit(this.alloc);
     }
 
-///O(n), linear search for node with matching name
+    ///O(n), linear search for node with matching name
     pub fn get_node(this: *const @This(), name: *const []u8) ?Node {
-for (this.nodes.items) |node| {
+        for (this.nodes.items) |node| {
             if (!std.mem.order([]u8, *node.tag, *name).differ()) {
                 return &node;
             }
@@ -187,6 +187,9 @@ for (this.nodes.items) |node| {
             .ind = 0,
         };
     }
+
+    pub fn tree_iterator(this: *@This(), alloc: std.mem.Allocator) !TreeIterator {
+        return try TreeIterator.init(alloc, this.root, this.nodes.items.len);
     }
 };
 
@@ -206,6 +209,36 @@ const TreeLinearIterator = struct {
             return ret;
         }
         return null;
+    }
+};
+
+const TreeIterator = struct {
+    stack: std.ArrayListUnmanaged(*const Node) = .{},
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator, root: *const Node, max_nodes: usize) !TreeIterator {
+        var it: TreeIterator = .{ .alloc = alloc };
+        try it.stack.ensureTotalCapacity(alloc, max_nodes);
+        it.stack.appendAssumeCapacity(root);
+        return it;
+    }
+
+    pub fn deinit(self: *TreeIterator) void {
+        self.stack.deinit(self.alloc);
+    }
+
+    pub fn next(self: *TreeIterator) ?*const Node {
+        if (self.stack.items.len == 0) return null;
+
+        const node = self.stack.pop().?;
+
+        // Push children in reverse to visit left-to-right.
+        var i = node.children.items.len;
+        while (i > 0) {
+            i -= 1;
+            self.stack.appendAssumeCapacity(node.children.items[i]);
+        }
+        return node;
     }
 };
 
@@ -267,6 +300,50 @@ test "tree :: linear iterator" {
     };
 
     var iter = try tree.linear_iterator(&alloc);
+    while (iter.next()) |node| {
+        std.debug.print("{f}\n", .{node.*});
+    }
+}
+
+test "tree :: tree iterator" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var nodes: [11]Node = undefined;
+
+    var p_name = "Parent Node".*;
+    var p_content = "Some Parent Content".*;
+    const parent_p = &nodes[0];
+    nodes[0] = .{
+        .parent = null,
+        .tag = &@as([]u8, &p_name),
+        .attributes = std.ArrayList(*Attribute).empty,
+        .children = std.ArrayList(*Node).empty,
+        .content = &@as([]u8, &p_content),
+    };
+
+    for (1..11) |i| {
+        var child_name = "Child Node".*;
+        var child_content = "Some Child Content".*;
+        nodes[i] = .{
+            .parent = parent_p,
+            .tag = &@as([]u8, &child_name),
+            .attributes = std.ArrayList(*Attribute).empty,
+            .children = std.ArrayList(*Node).empty,
+            .content = &@as([]u8, &child_content),
+        };
+    }
+
+    try parent_p.children.resize(alloc, 10);
+    for (1..11) |i| {
+        parent_p.children.items[i - 1] = &nodes[i];
+    }
+
+    var nodes_arrlist = std.ArrayList(Node).empty;
+    try nodes_arrlist.appendSlice(alloc, &nodes);
+    var tree: Tree = .{ .root = parent_p, .nodes = nodes_arrlist, .node_map = undefined, .alloc = alloc };
+
+    var iter = try tree.tree_iterator(alloc);
     while (iter.next()) |node| {
         std.debug.print("{f}\n", .{node.*});
     }
