@@ -101,7 +101,7 @@ const Attribute = struct {
 
 const Node = struct {
     parent: ?*Node,
-    name: *const []u8,
+    tag: *const []u8,
     attributes: std.ArrayList(*Attribute),
     children: std.ArrayList(*Node),
     content: ?*const []u8,
@@ -124,7 +124,7 @@ const Node = struct {
     }
 
     pub fn format(this: @This(), writer: *std.io.Writer) !void {
-        try writer.print("<{s} ", .{this.name.*});
+        try writer.print("<{s} ", .{this.tag.*});
 
         for (this.attributes.items) |attribute| {
             try attribute.format(writer);
@@ -138,7 +138,7 @@ const Node = struct {
         if (this.content != null) {
             try writer.print("{s}", .{this.content.?.*});
         }
-        try writer.print("</{s}>", .{this.name.*});
+        try writer.print("</{s}>", .{this.tag.*});
     }
 };
 
@@ -166,7 +166,7 @@ test "print xml" {
     var content = "Test content in here".*;
     const simpleXml: Node = .{
         .parent = null,
-        .name = &@as([]u8, &name),
+        .tag = &@as([]u8, &name),
         .attributes = std.ArrayList(*Attribute).empty,
         .children = std.ArrayList(*Node).empty,
         .content = &@as([]u8, &content),
